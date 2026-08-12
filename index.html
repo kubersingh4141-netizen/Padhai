@@ -1,0 +1,2457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Study Logger</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #e0e7ff;
+    --secondary: #0ea5e9;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --dark: #0f172a;
+    --surface: #1e293b;
+    --surface2: #273349;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.35);
+    --nav-w: 220px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--dark); color: var(--text); font-size: 15px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  a { color: inherit; text-decoration: none; }
+
+  /* LAYOUT */
+  #app { display: flex; height: 100vh; overflow: hidden; }
+  #sidebar {
+    width: var(--nav-w); background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0; transition: transform .3s; z-index: 100;
+  }
+  #sidebar-logo {
+    padding: 20px 18px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  #sidebar-logo .logo-icon {
+    width: 36px; height: 36px; background: var(--primary); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+  }
+  #sidebar-logo span { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  #nav { flex: 1; overflow-y: auto; padding: 10px 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 18px; cursor: pointer;
+    border-radius: 0; transition: background .15s, color .15s; color: var(--text-muted);
+    font-size: 14px; font-weight: 500; border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(99,102,241,.12); color: var(--primary); border-left-color: var(--primary); }
+  .nav-item .nav-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar {
+    height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 12px; flex-shrink: 0;
+  }
+  #menu-btn { display: none; background: none; border: none; cursor: pointer; color: var(--text); font-size: 22px; padding: 4px; }
+  #topbar-title { font-size: 17px; font-weight: 700; flex: 1; }
+  #conn-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .conn-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .status-ok { background: rgba(16,185,129,.15); color: var(--success); }
+  .status-err { background: rgba(239,68,68,.15); color: var(--danger); }
+  .status-warn { background: rgba(245,158,11,.15); color: var(--warning); }
+  #content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* VIEWS */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card-sm { padding: 14px 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .card-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .gap-16 { gap: 16px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-12 { margin-top: 12px; }
+  .mt-8 { margin-top: 8px; }
+  .mb-16 { margin-bottom: 16px; }
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-4 { gap: 4px; }
+  .flex-1 { flex: 1; }
+  .flex-wrap { flex-wrap: wrap; }
+
+  /* STAT CARDS */
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .stat-val { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+  .stat-sub { font-size: 12px; color: var(--text-dim); }
+  .stat-icon { font-size: 22px; margin-bottom: 4px; }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; transition: all .15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: rgba(239,68,68,.15); color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-success { background: rgba(16,185,129,.15); color: var(--success); border: 1px solid rgba(16,185,129,.3); }
+  .btn-success:hover { background: var(--success); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-icon { padding: 6px; border-radius: 6px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* FORMS */
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+  .form-input, .form-select, .form-textarea {
+    background: var(--dark); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 9px 12px; font-size: 14px; width: 100%; outline: none;
+    transition: border-color .15s; font-family: inherit;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+  .form-row { display: grid; gap: 12px; }
+  .form-row-2 { grid-template-columns: 1fr 1fr; }
+  .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-hint { font-size: 11px; color: var(--text-dim); }
+  option { background: var(--surface); }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    backdrop-filter: blur(4px);
+  }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
+  }
+  .modal-header {
+    padding: 20px 20px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 22px; line-height: 1; padding: 2px; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+  /* BADGES */
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-physics { background: rgba(99,102,241,.2); color: #a5b4fc; }
+  .badge-chemistry { background: rgba(14,165,233,.2); color: #7dd3fc; }
+  .badge-zoology { background: rgba(16,185,129,.2); color: #6ee7b7; }
+  .badge-botany { background: rgba(245,158,11,.2); color: #fcd34d; }
+
+  /* LIST ITEMS */
+  .list-item {
+    display: flex; align-items: flex-start; gap: 12px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .list-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .list-item:first-child { padding-top: 0; }
+  .list-item-icon {
+    width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0; margin-top: 1px;
+  }
+  .item-body { flex: 1; min-width: 0; }
+  .item-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .item-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+  /* SUBJECT COLORS */
+  .subj-physics { background: rgba(99,102,241,.15); color: #a5b4fc; }
+  .subj-chemistry { background: rgba(14,165,233,.15); color: #7dd3fc; }
+  .subj-zoology { background: rgba(16,185,129,.15); color: #6ee7b7; }
+  .subj-botany { background: rgba(245,158,11,.15); color: #fcd34d; }
+
+  /* PROGRESS BAR */
+  .progress-bar { height: 6px; background: var(--dark); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+  .progress-physics { background: var(--primary); }
+  .progress-chemistry { background: var(--secondary); }
+  .progress-zoology { background: var(--success); }
+  .progress-botany { background: var(--warning); }
+
+  /* CHAPTER GRID */
+  .chapter-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 14px; cursor: pointer; transition: border-color .15s, transform .1s;
+  }
+  .chapter-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .chapter-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .chapter-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chapter-stat { font-size: 11px; color: var(--text-muted); }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+  .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state .empty-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .empty-state .empty-sub { font-size: 13px; }
+
+  /* ALERT */
+  .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; display: flex; align-items: flex-start; gap: 8px; }
+  .alert-success { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); color: #6ee7b7; }
+  .alert-error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+  .alert-warning { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.3); color: #fcd34d; }
+  .alert-info { background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.3); color: #a5b4fc; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 2px; background: var(--dark); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab {
+    flex: 1; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    border-radius: 6px; text-align: center; color: var(--text-muted); transition: all .15s; border: none; background: none; min-width: 80px;
+  }
+  .tab.active { background: var(--surface); color: var(--text); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* TOAST */
+  #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px 16px; font-size: 13px; box-shadow: var(--shadow); min-width: 240px;
+    display: flex; align-items: center; gap: 10px; animation: toastIn .25s ease;
+  }
+  .toast-success { border-left: 3px solid var(--success); }
+  .toast-error { border-left: 3px solid var(--danger); }
+  .toast-info { border-left: 3px solid var(--primary); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+
+  /* LOADING */
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-overlay {
+    display: flex; align-items: center; justify-content: center; padding: 40px;
+    color: var(--text-muted); gap: 10px;
+  }
+
+  /* BREADCRUMB */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); margin-bottom: 16px; flex-wrap: wrap; }
+  .breadcrumb-sep { color: var(--border); }
+  .breadcrumb-link { cursor: pointer; color: var(--text-muted); }
+  .breadcrumb-link:hover { color: var(--primary); }
+  .breadcrumb-current { color: var(--text); font-weight: 600; }
+
+  /* TODO */
+  .todo-item {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-check {
+    width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 4px;
+    cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
+    transition: all .15s; background: transparent;
+  }
+  .todo-check:hover { border-color: var(--success); }
+  .todo-check.done { background: var(--success); border-color: var(--success); }
+  .todo-text { font-size: 14px; color: var(--text); flex: 1; word-break: break-word; }
+  .todo-text.done { text-decoration: line-through; color: var(--text-dim); }
+  .todo-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* CHAPTER DETAIL HEADER */
+  .chapter-header {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 20px;
+  }
+  .chapter-header-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .chapter-header-sub { font-size: 13px; color: var(--text-muted); }
+
+  /* TEST TABLE */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 10px 12px; text-align: left; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); background: var(--dark); font-weight: 600; white-space: nowrap; }
+  td { padding: 11px 12px; border-bottom: 1px solid rgba(51,65,85,.5); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* SETTINGS */
+  .settings-section { margin-bottom: 24px; }
+  .settings-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+  /* RESPONSIVE */
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 99; }
+  @media (max-width: 1100px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 900px) {
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 768px) {
+    :root { --nav-w: 220px; }
+    #menu-btn { display: block; }
+    #sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); }
+    #sidebar.open { transform: none; }
+    #overlay.show { display: block; }
+    #content { padding: 16px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+    .section-header { flex-direction: column; align-items: flex-start; }
+  }
+  @media (max-width: 480px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .stat-val { font-size: 22px; }
+    #content { padding: 12px; }
+  }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .font-bold { font-weight: 700; }
+  .text-success { color: var(--success); }
+  .text-danger { color: var(--danger); }
+  .text-warning { color: var(--warning); }
+  .text-primary { color: var(--primary); }
+  .text-muted { color: var(--text-muted); }
+  .text-sm { font-size: 12px; }
+  .w-full { width: 100%; }
+  .hidden { display: none !important; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  input[type="checkbox"] { accent-color: var(--primary); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--surface2);
+    border: 1px solid var(--border); color: var(--text-muted);
+  }
+  .chip.active { background: rgba(99,102,241,.2); border-color: var(--primary); color: var(--primary); }
+
+  /* Section header */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  .section-title { font-size: 18px; font-weight: 800; }
+  .section-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Dashboard subject cards */
+  .subj-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; cursor: pointer; transition: border-color .15s;
+  }
+  .subj-card:hover { border-color: var(--primary); }
+  .subj-card-icon { font-size: 28px; margin-bottom: 8px; }
+  .subj-card-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .subj-card-stats { font-size: 12px; color: var(--text-muted); }
+  .recent-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(51,65,85,.4); align-items: flex-start; }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<div id="overlay"></div>
+<div id="toast-container"></div>
+
+<div id="app">
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div id="sidebar-logo">
+      <div class="logo-icon">📚</div>
+      <span>Study<br>Logger</span>
+    </div>
+    <div id="nav">
+      <div class="nav-item active" data-view="home">
+        <span class="nav-icon">🏠</span> Dashboard
+      </div>
+      <div class="nav-item" data-view="subjects">
+        <span class="nav-icon">📖</span> Study
+      </div>
+      <div class="nav-item" data-view="tests">
+        <span class="nav-icon">📝</span> Tests
+      </div>
+      <div class="nav-item" data-view="mistakes">
+        <span class="nav-icon">⚠️</span> Mistakes
+      </div>
+      <div class="nav-item" data-view="settings">
+        <span class="nav-icon">⚙️</span> Settings
+      </div>
+    </div>
+    <div style="padding: 12px 18px; border-top:1px solid var(--border); font-size:11px; color:var(--text-dim);">
+      v1.0 · Study Logger
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOPBAR -->
+    <div id="topbar">
+      <button id="menu-btn">☰</button>
+      <span id="topbar-title">Dashboard</span>
+      <div id="conn-status" class="status-warn">⚡ Not Connected</div>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="content">
+
+      <!-- ===================== HOME VIEW ===================== -->
+      <div id="view-home" class="view active">
+        <div id="home-loading" class="loading-overlay"><div class="spinner"></div> Loading...</div>
+        <div id="home-content" class="hidden">
+          <!-- Not configured alert -->
+          <div id="home-not-cfg" class="alert alert-warning mb-16 hidden">
+            ⚡ Supabase not configured. Go to <strong>Settings</strong> to enter your connection details.
+          </div>
+
+          <!-- Stats row -->
+          <div class="grid-4 mb-16" id="home-stats">
+            <div class="stat-card">
+              <div class="stat-icon">📖</div>
+              <div class="stat-val" id="stat-lectures">0</div>
+              <div class="stat-label">Lectures Done</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">📋</div>
+              <div class="stat-val" id="stat-dpps">0</div>
+              <div class="stat-label">DPPs Logged</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">🔄</div>
+              <div class="stat-val" id="stat-revisions">0</div>
+              <div class="stat-label">Revisions</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">📝</div>
+              <div class="stat-val" id="stat-tests">0</div>
+              <div class="stat-label">Tests Taken</div>
+            </div>
+          </div>
+
+          <div class="grid-2 mb-16">
+            <!-- Subject Progress -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Subject Overview</div>
+                  <div class="card-sub">Lectures & DPPs per subject</div>
+                </div>
+              </div>
+              <div id="subj-progress-list"></div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Recent Activity</div>
+              </div>
+              <div id="recent-activity-list">
+                <div class="empty-state" style="padding:20px">
+                  <div class="empty-icon">📭</div>
+                  <div class="empty-sub">No recent activity</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2 mb-16">
+            <!-- To-Do -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📌 To-Do List</div>
+                <button class="btn btn-primary btn-sm" onclick="openTodoModal()">+ Add Task</button>
+              </div>
+              <div id="todo-list-home">
+                <div class="loading-overlay" style="padding:20px"><div class="spinner"></div></div>
+              </div>
+              <div class="mt-12">
+                <button class="btn btn-secondary btn-sm" onclick="showTodoHistory()">View Completed Tasks</button>
+              </div>
+            </div>
+
+            <!-- Test Summary -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📝 Test Performance</div>
+                <button class="btn btn-secondary btn-sm" onclick="navigate('tests')">View All</button>
+              </div>
+              <div id="test-summary-home">
+                <div class="empty-state" style="padding:20px">
+                  <div class="empty-icon">📊</div>
+                  <div class="empty-sub">No tests yet</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subject Quick Access -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Quick Access — Subjects</div>
+            </div>
+            <div class="grid-4" id="home-subj-cards"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SUBJECTS VIEW ===================== -->
+      <div id="view-subjects" class="view">
+        <div id="subjects-main">
+          <div class="section-header">
+            <div>
+              <div class="section-title">📖 Study</div>
+              <div class="section-sub">Select a subject to view chapters</div>
+            </div>
+          </div>
+          <div class="grid-4" id="subj-cards-list">
+            <!-- rendered by JS -->
+          </div>
+        </div>
+
+        <!-- CHAPTERS VIEW (sub-page) -->
+        <div id="chapters-view" class="hidden">
+          <div class="breadcrumb">
+            <span class="breadcrumb-link" onclick="backToSubjects()">Study</span>
+            <span class="breadcrumb-sep">›</span>
+            <span class="breadcrumb-current" id="chap-subj-name">Subject</span>
+          </div>
+          <div class="section-header">
+            <div>
+              <div class="section-title" id="chap-subj-title">Chapters</div>
+            </div>
+            <button class="btn btn-primary" onclick="openAddChapterModal()">+ Add Chapter</button>
+          </div>
+          <div id="chapters-loading" class="loading-overlay"><div class="spinner"></div> Loading...</div>
+          <div id="chapters-grid" class="grid-3 hidden"></div>
+          <div id="chapters-empty" class="empty-state hidden">
+            <div class="empty-icon">📂</div>
+            <div class="empty-title">No chapters yet</div>
+            <div class="empty-sub">Add your first chapter to get started</div>
+          </div>
+        </div>
+
+        <!-- CHAPTER DETAIL (sub-sub-page) -->
+        <div id="chapter-detail-view" class="hidden">
+          <div class="breadcrumb">
+            <span class="breadcrumb-link" onclick="backToSubjects()">Study</span>
+            <span class="breadcrumb-sep">›</span>
+            <span class="breadcrumb-link" id="detail-subj-name" onclick="backToChapters()">Subject</span>
+            <span class="breadcrumb-sep">›</span>
+            <span class="breadcrumb-current" id="detail-chap-name">Chapter</span>
+          </div>
+          <div class="chapter-header">
+            <div class="flex justify-between items-center flex-wrap gap-8">
+              <div>
+                <div class="chapter-header-title" id="detail-chap-title">Chapter Name</div>
+                <div class="chapter-header-sub" id="detail-chap-sub">Subject</div>
+              </div>
+              <div class="flex gap-8">
+                <button class="btn btn-secondary btn-sm" onclick="openEditChapterModal()">✏️ Rename</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCurrentChapter()">🗑️ Delete</button>
+              </div>
+            </div>
+            <!-- Chapter quick stats -->
+            <div class="grid-3 mt-16" id="chap-detail-stats"></div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" data-tab="lectures" onclick="switchTab('lectures', this)">📖 Lectures</button>
+            <button class="tab" data-tab="dpps" onclick="switchTab('dpps', this)">📋 DPPs</button>
+            <button class="tab" data-tab="revisions" onclick="switchTab('revisions', this)">🔄 Revisions</button>
+          </div>
+
+          <!-- LECTURES TAB -->
+          <div id="tab-lectures" class="tab-panel active">
+            <div class="section-header">
+              <div class="card-title">Lectures</div>
+              <button class="btn btn-primary btn-sm" onclick="openAddLectureModal()">+ Log Lecture</button>
+            </div>
+            <div id="lectures-list">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+
+          <!-- DPPS TAB -->
+          <div id="tab-dpps" class="tab-panel">
+            <div class="section-header">
+              <div class="card-title">DPPs</div>
+              <button class="btn btn-primary btn-sm" onclick="openAddDppModal()">+ Log DPP</button>
+            </div>
+            <div id="dpps-list">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+
+          <!-- REVISIONS TAB -->
+          <div id="tab-revisions" class="tab-panel">
+            <div class="section-header">
+              <div class="card-title">Revisions</div>
+              <button class="btn btn-primary btn-sm" onclick="openAddRevisionModal()">+ Log Revision</button>
+            </div>
+            <div id="revisions-list">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== TESTS VIEW ===================== -->
+      <div id="view-tests" class="view">
+        <div class="section-header">
+          <div>
+            <div class="section-title">📝 Tests</div>
+            <div class="section-sub">Track your test performance</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddTestModal()">+ Add Test</button>
+        </div>
+        <!-- Summary stats -->
+        <div class="grid-4 mb-16" id="test-stats-bar">
+          <div class="stat-card"><div class="stat-icon">📝</div><div class="stat-val" id="ts-total">0</div><div class="stat-label">Tests</div></div>
+          <div class="stat-card"><div class="stat-icon">🎯</div><div class="stat-val" id="ts-avg-score">—</div><div class="stat-label">Avg Score</div></div>
+          <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val" id="ts-avg-acc">—</div><div class="stat-label">Avg Accuracy</div></div>
+          <div class="stat-card"><div class="stat-icon">🏆</div><div class="stat-val" id="ts-best">—</div><div class="stat-label">Best %</div></div>
+        </div>
+        <div class="card">
+          <div id="tests-loading" class="loading-overlay"><div class="spinner"></div> Loading...</div>
+          <div id="tests-table-wrap" class="table-wrap hidden"></div>
+          <div id="tests-empty" class="empty-state hidden">
+            <div class="empty-icon">📝</div>
+            <div class="empty-title">No tests logged yet</div>
+            <div class="empty-sub">Add your first test to see performance analytics</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== MISTAKES VIEW ===================== -->
+      <div id="view-mistakes" class="view">
+        <div class="section-header">
+          <div>
+            <div class="section-title">⚠️ Mistakes</div>
+            <div class="section-sub">Personal notes on what you got wrong and learned</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddMistakeModal()">+ Add Mistake</button>
+        </div>
+        <!-- Filter chips -->
+        <div class="flex gap-8 mb-16 flex-wrap">
+          <span class="chip active" data-filter="all" onclick="filterMistakes('all', this)">All</span>
+          <span class="chip" data-filter="Physics" onclick="filterMistakes('Physics', this)">⚛️ Physics</span>
+          <span class="chip" data-filter="Chemistry" onclick="filterMistakes('Chemistry', this)">🧪 Chemistry</span>
+          <span class="chip" data-filter="Zoology" onclick="filterMistakes('Zoology', this)">🦋 Zoology</span>
+          <span class="chip" data-filter="Botany" onclick="filterMistakes('Botany', this)">🌿 Botany</span>
+        </div>
+        <!-- Search -->
+        <div class="mb-16">
+          <input type="text" class="form-input" id="mistake-search" placeholder="🔍 Search mistakes..." oninput="searchMistakes()" style="max-width:400px">
+        </div>
+        <div id="mistakes-loading" class="loading-overlay"><div class="spinner"></div> Loading...</div>
+        <div id="mistakes-list" class="hidden"></div>
+        <div id="mistakes-empty" class="empty-state hidden">
+          <div class="empty-icon">✅</div>
+          <div class="empty-title">No mistakes found</div>
+          <div class="empty-sub">Your mistake notes will appear here</div>
+        </div>
+      </div>
+
+      <!-- ===================== SETTINGS VIEW ===================== -->
+      <div id="view-settings" class="view">
+        <div class="section-header">
+          <div class="section-title">⚙️ Settings</div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">🔌 Supabase Connection</div>
+          <div class="card">
+            <div id="conn-alert-area" class="mb-16 hidden"></div>
+            <div class="form-group mb-16">
+              <label class="form-label">Supabase Project URL</label>
+              <input type="url" class="form-input" id="cfg-url" placeholder="https://xxxxxxxxxxxx.supabase.co">
+            </div>
+            <div class="form-group mb-16">
+              <label class="form-label">Supabase Anon / Publishable Key</label>
+              <input type="text" class="form-input" id="cfg-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+            <div class="flex gap-8 flex-wrap">
+              <button class="btn btn-primary" onclick="saveSettings()">💾 Save Connection</button>
+              <button class="btn btn-secondary" onclick="testConnection()">🔌 Test Connection</button>
+              <button class="btn btn-danger btn-sm" onclick="clearSettings()">Clear</button>
+            </div>
+            <div class="form-hint mt-8">Credentials are saved locally in your browser (localStorage). They are never stored in the database.</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">📤 Export Data</div>
+          <div class="card">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Export all your study data as a structured JSON file. Includes subjects, chapters, lectures, DPPs, revisions, mistakes, tests, and to-dos with full relationship data.</p>
+            <button class="btn btn-primary" onclick="exportData()">📥 Download JSON Export</button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">📋 Database Setup SQL</div>
+          <div class="card">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">If you need to set up or verify your Supabase tables, run this SQL in your Supabase SQL editor. This is safe to run multiple times (uses CREATE TABLE IF NOT EXISTS).</p>
+            <button class="btn btn-secondary" onclick="toggleSqlView()">👁️ Show Setup SQL</button>
+            <div id="sql-view" class="hidden mt-16">
+              <pre style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:11px;color:var(--text-muted);overflow-x:auto;white-space:pre-wrap;line-height:1.6;" id="sql-content"></pre>
+              <button class="btn btn-secondary btn-sm mt-8" onclick="copySql()">📋 Copy SQL</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- Add Chapter Modal -->
+<div id="modal-chapter" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-chapter-title">Add Chapter</span>
+      <button class="modal-close" onclick="closeModal('modal-chapter')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Chapter Name</label>
+        <input type="text" class="form-input" id="chapter-name-input" placeholder="e.g. Kinematics" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-chapter')">Cancel</button>
+      <button class="btn btn-primary" id="save-chapter-btn" onclick="saveChapter()">Save Chapter</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Lecture Modal -->
+<div id="modal-lecture" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-lecture-title">Log Lecture</span>
+      <button class="modal-close" onclick="closeModal('modal-lecture')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Lecture Number</label>
+        <input type="number" class="form-input" id="lecture-num-input" placeholder="e.g. 5" min="1" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="lecture-notes-input" placeholder="Any notes about this lecture..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-lecture')">Cancel</button>
+      <button class="btn btn-primary" id="save-lecture-btn" onclick="saveLecture()">Save Lecture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add DPP Modal -->
+<div id="modal-dpp" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-dpp-title">Log DPP</span>
+      <button class="modal-close" onclick="closeModal('modal-dpp')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row form-row-2">
+        <div class="form-group">
+          <label class="form-label">DPP Number</label>
+          <input type="number" class="form-input" id="dpp-num-input" placeholder="e.g. 3" min="1" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Score / Marks</label>
+          <input type="text" class="form-input" id="dpp-score-input" placeholder="e.g. 18/25" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="dpp-notes-input" placeholder="Any notes about this DPP..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dpp')">Cancel</button>
+      <button class="btn btn-primary" id="save-dpp-btn" onclick="saveDpp()">Save DPP</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Revision Modal -->
+<div id="modal-revision" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-revision-title">Log Revision</span>
+      <button class="modal-close" onclick="closeModal('modal-revision')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">What did you revise?</label>
+        <textarea class="form-textarea" id="revision-notes-input" placeholder="e.g. Revised formulas and solved examples from this chapter." style="min-height:120px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-revision')">Cancel</button>
+      <button class="btn btn-primary" id="save-revision-btn" onclick="saveRevision()">Save Revision</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Test Modal -->
+<div id="modal-test" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-test-title">Add Test</span>
+      <button class="modal-close" onclick="closeModal('modal-test')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Test Name</label>
+        <input type="text" class="form-input" id="test-name-input" placeholder="e.g. Physics Mock Test 1" />
+      </div>
+      <div class="form-row form-row-2">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="test-date-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Total Questions</label>
+          <input type="number" class="form-input" id="test-total-input" placeholder="e.g. 180" min="1" />
+        </div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="form-group">
+          <label class="form-label">✅ Correct</label>
+          <input type="number" class="form-input" id="test-correct-input" placeholder="0" min="0" oninput="calcTestPreview()" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">❌ Wrong</label>
+          <input type="number" class="form-input" id="test-wrong-input" placeholder="0" min="0" oninput="calcTestPreview()" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">⬜ Not Attempted</label>
+          <input type="number" class="form-input" id="test-na-input" placeholder="0" min="0" oninput="calcTestPreview()" />
+        </div>
+      </div>
+      <!-- Preview -->
+      <div id="test-preview" class="card card-sm" style="background:var(--dark);border-color:var(--border);">
+        <div class="grid-4" style="gap:10px">
+          <div><div class="stat-label">Score</div><div style="font-size:16px;font-weight:700;" id="prev-score">—</div></div>
+          <div><div class="stat-label">Max</div><div style="font-size:16px;font-weight:700;" id="prev-max">—</div></div>
+          <div><div class="stat-label">%</div><div style="font-size:16px;font-weight:700;" id="prev-pct">—</div></div>
+          <div><div class="stat-label">Accuracy</div><div style="font-size:16px;font-weight:700;" id="prev-acc">—</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-test')">Cancel</button>
+      <button class="btn btn-primary" id="save-test-btn" onclick="saveTest()">Save Test</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Mistake Modal -->
+<div id="modal-mistake" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-mistake-title">Add Mistake Note</span>
+      <button class="modal-close" onclick="closeModal('modal-mistake')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Subject</label>
+        <select class="form-select" id="mistake-subj-input">
+          <option value="">Select subject...</option>
+          <option value="Physics">⚛️ Physics</option>
+          <option value="Chemistry">🧪 Chemistry</option>
+          <option value="Zoology">🦋 Zoology</option>
+          <option value="Botany">🌿 Botany</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Topic / Title (optional)</label>
+        <input type="text" class="form-input" id="mistake-topic-input" placeholder="e.g. Newton's Laws" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mistake Note</label>
+        <textarea class="form-textarea" id="mistake-note-input" placeholder="Describe the mistake, what you misunderstood, and what you learned..." style="min-height:130px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mistake')">Cancel</button>
+      <button class="btn btn-primary" id="save-mistake-btn" onclick="saveMistake()">Save Mistake</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Todo Modal -->
+<div id="modal-todo" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Task</span>
+      <button class="modal-close" onclick="closeModal('modal-todo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Task</label>
+        <textarea class="form-textarea" id="todo-text-input" placeholder="What do you need to do?" style="min-height:80px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-todo')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTodo()">Add Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Todo History Modal -->
+<div id="modal-todo-history" class="modal-overlay hidden">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <span class="modal-title">✅ Completed Tasks</span>
+      <button class="modal-close" onclick="closeModal('modal-todo-history')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="todo-history-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div id="modal-confirm" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title">Confirm Delete</span>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-msg" style="font-size:14px;color:var(--text-muted);">Are you sure you want to delete this?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========================================================================
+// STUDY LOGGER — Complete Application
+// ========================================================================
+
+// ──────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────
+let db = null; // supabase client
+let currentView = 'home';
+let currentSubject = null; // { id, name }
+let currentChapter = null; // { id, name, subject_id }
+let editingId = null;       // id of record being edited
+let mistakeFilter = 'all';
+let allMistakes = [];
+let confirmCallback = null;
+// Data stores for safe in-memory editing (avoids attribute encoding issues)
+let _revisionsCache = [];
+let _mistakesCache  = [];
+let _lecturesCache  = [];
+let _dppsCache      = [];
+let _chaptersCache  = [];
+
+const SUBJECTS = [
+  { name: 'Physics',   icon: '⚛️',  color: 'physics' },
+  { name: 'Chemistry', icon: '🧪',  color: 'chemistry' },
+  { name: 'Zoology',   icon: '🦋',  color: 'zoology' },
+  { name: 'Botany',    icon: '🌿',  color: 'botany' }
+];
+
+const SUBJECT_COLORS = { Physics:'physics', Chemistry:'chemistry', Zoology:'zoology', Botany:'botany' };
+const SUBJECT_ICONS  = { Physics:'⚛️', Chemistry:'🧪', Zoology:'🦋', Botany:'🌿' };
+
+// ──────────────────────────────────────────────
+// SUPABASE INIT
+// ──────────────────────────────────────────────
+function loadConfig() {
+  return {
+    url: localStorage.getItem('sl_url') || '',
+    key: localStorage.getItem('sl_key') || ''
+  };
+}
+
+function initSupabase() {
+  const cfg = loadConfig();
+  if (!cfg.url || !cfg.key) { setConnStatus('warn', '⚡ Not Connected'); return false; }
+  try {
+    const { createClient } = supabase;
+    db = createClient(cfg.url, cfg.key);
+    setConnStatus('ok', '✅ Connected');
+    return true;
+  } catch(e) {
+    setConnStatus('err', '❌ Error');
+    return false;
+  }
+}
+
+function setConnStatus(type, txt) {
+  const el = document.getElementById('conn-status');
+  if (!el) return;
+  el.textContent = txt;
+  el.className = 'conn-status';
+  if (type === 'ok')   el.className += ' status-ok';
+  if (type === 'err')  el.className += ' status-err';
+  if (type === 'warn') el.className += ' status-warn';
+}
+
+function isConfigured() {
+  return !!db;
+}
+
+// ──────────────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────────────
+function navigate(view, updateNav = true) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('view-' + view);
+  if (el) el.classList.add('active');
+  currentView = view;
+
+  // Reset sub-views when navigating to subjects
+  if (view === 'subjects') {
+    showSubjectsMain();
+  }
+
+  if (updateNav) {
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.classList.toggle('active', n.dataset.view === view);
+    });
+  }
+
+  const titles = { home:'Dashboard', subjects:'Study', tests:'Tests', mistakes:'Mistakes', settings:'Settings' };
+  document.getElementById('topbar-title').textContent = titles[view] || view;
+
+  closeSidebar();
+  loadView(view);
+}
+
+function loadView(view) {
+  if (view === 'home') loadHome();
+  else if (view === 'tests') loadTests();
+  else if (view === 'mistakes') loadMistakes();
+  else if (view === 'subjects') renderSubjectCards();
+  else if (view === 'settings') loadSettings();
+}
+
+// sidebar
+document.getElementById('menu-btn').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+});
+document.getElementById('overlay').addEventListener('click', closeSidebar);
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => navigate(item.dataset.view));
+});
+
+// ──────────────────────────────────────────────
+// TOAST NOTIFICATIONS
+// ──────────────────────────────────────────────
+function toast(msg, type = 'info', dur = 3500) {
+  const icons = { success:'✅', error:'❌', info:'ℹ️' };
+  const tc = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  tc.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(() => t.remove(), 300); }, dur);
+}
+
+// ──────────────────────────────────────────────
+// MODALS
+// ──────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function confirmDelete(msg, cb) {
+  document.getElementById('confirm-msg').textContent = msg;
+  confirmCallback = cb;
+  document.getElementById('confirm-ok-btn').onclick = () => { closeModal('modal-confirm'); cb(); };
+  openModal('modal-confirm');
+}
+
+// ──────────────────────────────────────────────
+// HOME DASHBOARD
+// ──────────────────────────────────────────────
+async function loadHome() {
+  const loading = document.getElementById('home-loading');
+  const content = document.getElementById('home-content');
+  loading.classList.remove('hidden');
+  content.classList.add('hidden');
+
+  if (!isConfigured()) {
+    document.getElementById('home-not-cfg').classList.remove('hidden');
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+    renderHomeSubjectCards();
+    document.getElementById('todo-list-home').innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon">⚡</div><div class="empty-sub">Connect Supabase first</div></div>';
+    document.getElementById('recent-activity-list').innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon">⚡</div><div class="empty-sub">Connect Supabase first</div></div>';
+    return;
+  }
+  document.getElementById('home-not-cfg').classList.add('hidden');
+
+  try {
+    // Fetch all data in parallel
+    const [covRes, revRes, testRes, mistRes, todoRes, chapRes, subjRes] = await Promise.all([
+      db.from('study_covered').select('*').order('created_at', { ascending: false }),
+      db.from('study_revisions').select('*').order('created_at', { ascending: false }),
+      db.from('study_tests').select('*').order('test_date', { ascending: false }),
+      db.from('study_mistakes').select('*').order('created_at', { ascending: false }),
+      db.from('study_topics').select('*').order('created_at', { ascending: false }),
+      db.from('study_chapters').select('*'),
+      db.from('study_subjects').select('*')
+    ]);
+
+    const covered   = covRes.data || [];
+    const revisions = revRes.data || [];
+    const tests     = testRes.data || [];
+    const mistakes  = mistRes.data || [];
+    const todos     = todoRes.data || [];
+    const chapters  = chapRes.data || [];
+    const subjects  = subjRes.data || [];
+
+    const lectures = covered.filter(c => c.type === 'lecture');
+    const dpps     = covered.filter(c => c.type === 'dpp');
+
+    // Stats
+    document.getElementById('stat-lectures').textContent  = lectures.length;
+    document.getElementById('stat-dpps').textContent      = dpps.length;
+    document.getElementById('stat-revisions').textContent = revisions.length;
+    document.getElementById('stat-tests').textContent     = tests.length;
+
+    // Subject progress
+    renderSubjectProgress(subjects, chapters, lectures, dpps);
+
+    // Recent activity
+    renderRecentActivity(lectures, dpps, revisions, mistakes, tests, subjects, chapters);
+
+    // Todos
+    const pendingTodos = todos.filter(t => !t.is_completed);
+    renderTodoHome(pendingTodos);
+
+    // Test summary
+    renderTestSummaryHome(tests);
+
+    // Subject quick access cards
+    renderHomeSubjectCards();
+
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+  } catch(e) {
+    console.error(e);
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+    toast('Failed to load dashboard: ' + e.message, 'error');
+  }
+}
+
+function renderSubjectProgress(subjects, chapters, lectures, dpps) {
+  const el = document.getElementById('subj-progress-list');
+  if (!el) return;
+  let html = '';
+  SUBJECTS.forEach(s => {
+    const subj = subjects.find(x => x.name === s.name);
+    const subjId = subj ? subj.id : null;
+    const chapCount = chapters.filter(c => c.subject_id === subjId).length;
+    const chapIds = chapters.filter(c => c.subject_id === subjId).map(c => c.id);
+    const lCount = lectures.filter(l => chapIds.includes(l.chapter_id)).length;
+    const dCount = dpps.filter(d => chapIds.includes(d.chapter_id)).length;
+    const colorClass = 'progress-' + s.color;
+    const pct = chapCount > 0 ? Math.min(100, Math.round((lCount / Math.max(chapCount, 1)) * 10)) : 0;
+    html += `
+      <div style="margin-bottom:14px">
+        <div class="flex justify-between items-center" style="margin-bottom:5px">
+          <span style="font-size:13px;font-weight:600">${s.icon} ${s.name}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${chapCount} chap · ${lCount} lec · ${dCount} DPP</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill ${colorClass}" style="width:${pct}%"></div></div>
+      </div>
+    `;
+  });
+  if (!html) html = '<div class="text-muted text-sm">No data yet</div>';
+  el.innerHTML = html;
+}
+
+function renderRecentActivity(lectures, dpps, revisions, mistakes, tests, subjects, chapters) {
+  const el = document.getElementById('recent-activity-list');
+  if (!el) return;
+
+  const getChapName = id => { const c = chapters.find(x => x.id === id); return c ? c.name : ''; };
+  const getSubjName = id => { const s = subjects.find(x => x.id === id); return s ? s.name : ''; };
+
+  let items = [];
+
+  lectures.slice(0,5).forEach(l => {
+    const ch = getChapName(l.chapter_id);
+    items.push({ ts: l.created_at, color: 'var(--primary)', icon:'📖', text: `Lecture ${l.lecture_number || l.content || ''} — ${ch}` });
+  });
+  dpps.slice(0,3).forEach(d => {
+    const ch = getChapName(d.chapter_id);
+    items.push({ ts: d.created_at, color: 'var(--secondary)', icon:'📋', text: `DPP ${d.dpp_number || ''} (${d.score || ''}) — ${ch}` });
+  });
+  revisions.slice(0,3).forEach(r => {
+    const ch = getChapName(r.chapter_id);
+    items.push({ ts: r.created_at, color: 'var(--success)', icon:'🔄', text: `Revision — ${ch}` });
+  });
+  mistakes.slice(0,2).forEach(m => {
+    items.push({ ts: m.created_at, color: 'var(--warning)', icon:'⚠️', text: `Mistake: ${m.topic || m.note.substring(0,40)}` });
+  });
+  tests.slice(0,2).forEach(t => {
+    items.push({ ts: t.created_at || t.test_date, color: 'var(--danger)', icon:'📝', text: `Test: ${t.name}` });
+  });
+
+  items.sort((a,b) => new Date(b.ts) - new Date(a.ts));
+  items = items.slice(0, 10);
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon">📭</div><div class="empty-sub">No recent activity</div></div>';
+    return;
+  }
+
+  el.innerHTML = items.map(it => `
+    <div class="recent-item">
+      <div class="recent-dot" style="background:${it.color}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:var(--text)">${it.icon} ${esc(it.text)}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${formatDate(it.ts)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTodoHome(todos) {
+  const el = document.getElementById('todo-list-home');
+  if (!el) return;
+  if (!todos.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon">🎉</div><div class="empty-title">All done!</div><div class="empty-sub">No pending tasks</div></div>';
+    return;
+  }
+  el.innerHTML = todos.slice(0,8).map(t => `
+    <div class="todo-item">
+      <div class="todo-check" onclick="completeTodo('${t.id}', this)" title="Mark complete"></div>
+      <div style="flex:1">
+        <div class="todo-text">${esc(t.task_text)}</div>
+        <div class="todo-meta">Added ${formatDate(t.created_at)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteTodo('${t.id}')" title="Delete">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTestSummaryHome(tests) {
+  const el = document.getElementById('test-summary-home');
+  if (!el || !tests.length) return;
+  const recent = tests.slice(0,3);
+  el.innerHTML = recent.map(t => {
+    const score = (t.correct * 4) - t.wrong;
+    const max   = t.total_questions * 4;
+    const pct   = max > 0 ? ((score / max) * 100).toFixed(1) : '0';
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div class="flex justify-between items-center">
+          <span style="font-size:13px;font-weight:600">${esc(t.name)}</span>
+          <span class="badge ${pct>=50?'badge-zoology':'badge-physics'}">${pct}%</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Score: ${score}/${max} · ${formatDate(t.test_date || t.created_at)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderHomeSubjectCards() {
+  const el = document.getElementById('home-subj-cards');
+  if (!el) return;
+  el.innerHTML = SUBJECTS.map(s => `
+    <div class="subj-card" onclick="navigateToSubject('${s.name}')">
+      <div class="subj-card-icon">${s.icon}</div>
+      <div class="subj-card-name">${s.name}</div>
+      <div class="subj-card-stats text-sm text-muted">Click to view chapters →</div>
+    </div>
+  `).join('');
+}
+
+// ──────────────────────────────────────────────
+// TODO
+// ──────────────────────────────────────────────
+function openTodoModal() {
+  document.getElementById('todo-text-input').value = '';
+  openModal('modal-todo');
+}
+
+async function saveTodo() {
+  const text = document.getElementById('todo-text-input').value.trim();
+  if (!text) { toast('Please enter a task', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  try {
+    const { error } = await db.from('study_topics').insert({ task_text: text, is_completed: false, created_at: new Date().toISOString() });
+    if (error) throw error;
+    closeModal('modal-todo');
+    toast('Task added', 'success');
+    loadHome();
+  } catch(e) { toast('Failed to save task: ' + e.message, 'error'); }
+}
+
+async function completeTodo(id, el) {
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  try {
+    const { error } = await db.from('study_topics').update({ is_completed: true, completed_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
+    toast('Task completed! 🎉', 'success');
+    loadHome();
+  } catch(e) { toast('Failed to complete task: ' + e.message, 'error'); }
+}
+
+async function deleteTodo(id) {
+  confirmDelete('Delete this task permanently?', async () => {
+    if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+    try {
+      const { error } = await db.from('study_topics').delete().eq('id', id);
+      if (error) throw error;
+      toast('Task deleted', 'success');
+      loadHome();
+    } catch(e) { toast('Failed to delete task: ' + e.message, 'error'); }
+  });
+}
+
+async function showTodoHistory() {
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  const el = document.getElementById('todo-history-list');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div> Loading...</div>';
+  openModal('modal-todo-history');
+  try {
+    const { data, error } = await db.from('study_topics').select('*').eq('is_completed', true).order('completed_at', { ascending: false });
+    if (error) throw error;
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-sub">No completed tasks yet</div></div>';
+      return;
+    }
+    el.innerHTML = data.map(t => `
+      <div class="todo-item">
+        <div class="todo-check done">✓</div>
+        <div style="flex:1">
+          <div class="todo-text done">${esc(t.task_text)}</div>
+          <div class="todo-meta">Completed ${formatDate(t.completed_at)} · Added ${formatDate(t.created_at)}</div>
+        </div>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteTodo('${t.id}')" title="Delete">🗑️</button>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = `<div class="alert alert-error">Failed to load: ${e.message}</div>`; }
+}
+
+// ──────────────────────────────────────────────
+// SUBJECTS
+// ──────────────────────────────────────────────
+function renderSubjectCards() {
+  const el = document.getElementById('subj-cards-list');
+  if (!el) return;
+  el.innerHTML = SUBJECTS.map(s => `
+    <div class="subj-card" onclick="navigateToSubject('${s.name}')">
+      <div class="subj-card-icon" style="font-size:36px;margin-bottom:10px">${s.icon}</div>
+      <div class="subj-card-name" style="font-size:17px">${s.name}</div>
+      <div class="subj-card-stats text-sm text-muted mt-8">View chapters →</div>
+    </div>
+  `).join('');
+}
+
+async function navigateToSubject(name) {
+  navigate('subjects', true);
+
+  if (!isConfigured()) { toast('Supabase not configured. Go to Settings first.', 'error'); return; }
+
+  // Ensure subject row exists
+  let { data: subjs, error: se } = await db.from('study_subjects').select('*').eq('name', name);
+  if (se) { toast('Error loading subject: ' + se.message, 'error'); return; }
+
+  let subj = subjs && subjs[0];
+  if (!subj) {
+    const { data: ins, error: ie } = await db.from('study_subjects').insert({ name }).select().single();
+    if (ie) { toast('Error creating subject: ' + ie.message, 'error'); return; }
+    subj = ins;
+  }
+  currentSubject = { id: subj.id, name: subj.name };
+
+  document.getElementById('subjects-main').classList.add('hidden');
+  document.getElementById('chapters-view').classList.remove('hidden');
+  document.getElementById('chapter-detail-view').classList.add('hidden');
+  document.getElementById('chap-subj-name').textContent = name;
+  document.getElementById('chap-subj-title').textContent = `${SUBJECT_ICONS[name] || ''} ${name} — Chapters`;
+  document.getElementById('topbar-title').textContent = name;
+
+  loadChapters();
+}
+
+function backToSubjects() {
+  currentSubject = null;
+  currentChapter = null;
+  showSubjectsMain();
+  document.getElementById('topbar-title').textContent = 'Study';
+}
+
+function showSubjectsMain() {
+  document.getElementById('subjects-main').classList.remove('hidden');
+  document.getElementById('chapters-view').classList.add('hidden');
+  document.getElementById('chapter-detail-view').classList.add('hidden');
+  renderSubjectCards();
+}
+
+function backToChapters() {
+  currentChapter = null;
+  document.getElementById('chapters-view').classList.remove('hidden');
+  document.getElementById('chapter-detail-view').classList.add('hidden');
+  document.getElementById('topbar-title').textContent = currentSubject ? currentSubject.name : 'Study';
+  loadChapters();
+}
+
+async function loadChapters() {
+  const grid    = document.getElementById('chapters-grid');
+  const empty   = document.getElementById('chapters-empty');
+  const loading = document.getElementById('chapters-loading');
+  grid.classList.add('hidden'); empty.classList.add('hidden'); loading.classList.remove('hidden');
+
+  try {
+    const { data, error } = await db.from('study_chapters').select('*').eq('subject_id', currentSubject.id).order('name');
+    if (error) throw error;
+    loading.classList.add('hidden');
+    if (!data || !data.length) { empty.classList.remove('hidden'); return; }
+
+    // Get counts
+    const chapIds = data.map(c => c.id);
+    const [covRes, revRes] = await Promise.all([
+      db.from('study_covered').select('id, chapter_id, type').in('chapter_id', chapIds),
+      db.from('study_revisions').select('id, chapter_id').in('chapter_id', chapIds)
+    ]);
+    const covered   = covRes.data || [];
+    const revisions = revRes.data || [];
+    _chaptersCache  = data;
+
+    grid.innerHTML = data.map(ch => {
+      const lc = covered.filter(c => c.chapter_id === ch.id && c.type === 'lecture').length;
+      const dc = covered.filter(c => c.chapter_id === ch.id && c.type === 'dpp').length;
+      const rc = revisions.filter(r => r.chapter_id === ch.id).length;
+      return `
+        <div class="chapter-card" onclick="openChapterDetailById('${ch.id}')">
+          <div class="chapter-name">${esc(ch.name)}</div>
+          <div class="chapter-stats">
+            <span class="chapter-stat">📖 ${lc} lec</span>
+            <span class="chapter-stat">📋 ${dc} DPP</span>
+            <span class="chapter-stat">🔄 ${rc} rev</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    grid.classList.remove('hidden');
+  } catch(e) {
+    loading.classList.add('hidden');
+    toast('Failed to load chapters: ' + e.message, 'error');
+  }
+}
+
+// Add Chapter
+function openAddChapterModal() {
+  editingId = null;
+  document.getElementById('modal-chapter-title').textContent = 'Add Chapter';
+  document.getElementById('chapter-name-input').value = '';
+  openModal('modal-chapter');
+}
+
+function openEditChapterModal() {
+  if (!currentChapter) return;
+  editingId = currentChapter.id;
+  document.getElementById('modal-chapter-title').textContent = 'Rename Chapter';
+  document.getElementById('chapter-name-input').value = currentChapter.name;
+  openModal('modal-chapter');
+}
+
+async function saveChapter() {
+  const name = document.getElementById('chapter-name-input').value.trim();
+  if (!name) { toast('Enter a chapter name', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  const btn = document.getElementById('save-chapter-btn');
+  btn.disabled = true;
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_chapters').update({ name }).eq('id', editingId);
+      if (error) throw error;
+      if (currentChapter) { currentChapter.name = name; document.getElementById('detail-chap-title').textContent = name; document.getElementById('detail-chap-name').textContent = name; }
+      toast('Chapter renamed', 'success');
+    } else {
+      const { error } = await db.from('study_chapters').insert({ name, subject_id: currentSubject.id, created_at: new Date().toISOString() });
+      if (error) throw error;
+      toast('Chapter added', 'success');
+    }
+    closeModal('modal-chapter');
+    loadChapters();
+  } catch(e) { toast('Failed to save chapter: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function deleteCurrentChapter() {
+  if (!currentChapter) return;
+  confirmDelete(`Delete chapter "${currentChapter.name}"? This will also delete all lectures, DPPs, and revisions.`, async () => {
+    try {
+      await db.from('study_covered').delete().eq('chapter_id', currentChapter.id);
+      await db.from('study_revisions').delete().eq('chapter_id', currentChapter.id);
+      const { error } = await db.from('study_chapters').delete().eq('id', currentChapter.id);
+      if (error) throw error;
+      toast('Chapter deleted', 'success');
+      currentChapter = null;
+      backToChapters();
+    } catch(e) { toast('Failed to delete chapter: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// CHAPTER DETAIL
+// ──────────────────────────────────────────────
+function openChapterDetailById(chapId) {
+  const ch = _chaptersCache.find(x => x.id == chapId);
+  if (!ch) return;
+  openChapterDetail(ch.id, ch.name);
+}
+
+async function openChapterDetail(chapId, chapName) {
+  currentChapter = { id: chapId, name: chapName, subject_id: currentSubject.id };
+
+  document.getElementById('chapters-view').classList.add('hidden');
+  document.getElementById('chapter-detail-view').classList.remove('hidden');
+
+  document.getElementById('detail-subj-name').textContent = currentSubject.name;
+  document.getElementById('detail-chap-name').textContent = chapName;
+  document.getElementById('detail-chap-title').textContent = chapName;
+  document.getElementById('detail-chap-sub').textContent = `${SUBJECT_ICONS[currentSubject.name] || ''} ${currentSubject.name}`;
+  document.getElementById('topbar-title').textContent = chapName;
+
+  // Default to lectures tab
+  switchTab('lectures', document.querySelector('[data-tab="lectures"]'));
+  loadChapterData();
+}
+
+async function loadChapterData() {
+  loadLectures();
+  loadDpps();
+  loadRevisions();
+  loadChapterStats();
+}
+
+async function loadChapterStats() {
+  if (!currentChapter) return;
+  try {
+    const [covRes, revRes] = await Promise.all([
+      db.from('study_covered').select('*').eq('chapter_id', currentChapter.id),
+      db.from('study_revisions').select('*').eq('chapter_id', currentChapter.id)
+    ]);
+    const covered   = covRes.data || [];
+    const revisions = revRes.data || [];
+    const lects     = covered.filter(c => c.type === 'lecture');
+    const dpps      = covered.filter(c => c.type === 'dpp');
+
+    document.getElementById('chap-detail-stats').innerHTML = `
+      <div class="stat-card card-sm">
+        <div class="stat-icon">📖</div>
+        <div class="stat-val">${lects.length}</div>
+        <div class="stat-label">Lectures</div>
+      </div>
+      <div class="stat-card card-sm">
+        <div class="stat-icon">📋</div>
+        <div class="stat-val">${dpps.length}</div>
+        <div class="stat-label">DPPs</div>
+      </div>
+      <div class="stat-card card-sm">
+        <div class="stat-icon">🔄</div>
+        <div class="stat-val">${revisions.length}</div>
+        <div class="stat-label">Revisions</div>
+      </div>
+    `;
+  } catch(e) {}
+}
+
+// Tabs
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+// ──────────────────────────────────────────────
+// LECTURES
+// ──────────────────────────────────────────────
+function openAddLectureModal() {
+  editingId = null;
+  document.getElementById('modal-lecture-title').textContent = 'Log Lecture';
+  document.getElementById('lecture-num-input').value = '';
+  document.getElementById('lecture-notes-input').value = '';
+  openModal('modal-lecture');
+}
+
+async function saveLecture() {
+  const num   = document.getElementById('lecture-num-input').value.trim();
+  const notes = document.getElementById('lecture-notes-input').value.trim();
+  if (!num) { toast('Enter a lecture number', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  const btn = document.getElementById('save-lecture-btn');
+  btn.disabled = true;
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_covered').update({ lecture_number: parseInt(num), content: notes }).eq('id', editingId);
+      if (error) throw error;
+      toast('Lecture updated', 'success');
+    } else {
+      const { error } = await db.from('study_covered').insert({
+        chapter_id: currentChapter.id, type: 'lecture',
+        lecture_number: parseInt(num), content: notes, created_at: new Date().toISOString()
+      });
+      if (error) throw error;
+      toast('Lecture logged', 'success');
+    }
+    closeModal('modal-lecture');
+    loadLectures();
+    loadChapterStats();
+  } catch(e) { toast('Failed to save lecture: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function loadLectures() {
+  const el = document.getElementById('lectures-list');
+  if (!el || !currentChapter) return;
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  try {
+    const { data, error } = await db.from('study_covered').select('*').eq('chapter_id', currentChapter.id).eq('type','lecture').order('lecture_number');
+    if (error) throw error;
+    _lecturesCache = data || [];
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📖</div><div class="empty-title">No lectures logged</div><div class="empty-sub">Log your first lecture</div></div>';
+      return;
+    }
+    el.innerHTML = '<div class="card">' + data.map(l => `
+      <div class="list-item">
+        <div class="list-item-icon subj-${SUBJECT_COLORS[currentSubject.name] || 'physics'}">📖</div>
+        <div class="item-body">
+          <div class="item-title">Lecture ${l.lecture_number}</div>
+          ${l.content ? `<div class="item-sub">${esc(l.content)}</div>` : ''}
+          <div class="item-sub">${formatDate(l.created_at)}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn btn-secondary btn-sm btn-icon" onclick="editLecture('${l.id}')" title="Edit">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteLecture('${l.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">Failed to load lectures: ${e.message}</div>`;
+  }
+}
+
+function editLecture(id) {
+  const l = _lecturesCache.find(x => x.id == id);
+  if (!l) return;
+  editingId = id;
+  document.getElementById('modal-lecture-title').textContent = 'Edit Lecture';
+  document.getElementById('lecture-num-input').value = l.lecture_number;
+  document.getElementById('lecture-notes-input').value = l.content || '';
+  openModal('modal-lecture');
+}
+
+function deleteLecture(id) {
+  confirmDelete('Delete this lecture log?', async () => {
+    try {
+      const { error } = await db.from('study_covered').delete().eq('id', id);
+      if (error) throw error;
+      toast('Lecture deleted', 'success');
+      loadLectures();
+      loadChapterStats();
+    } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// DPPS
+// ──────────────────────────────────────────────
+function openAddDppModal() {
+  editingId = null;
+  document.getElementById('modal-dpp-title').textContent = 'Log DPP';
+  document.getElementById('dpp-num-input').value = '';
+  document.getElementById('dpp-score-input').value = '';
+  document.getElementById('dpp-notes-input').value = '';
+  openModal('modal-dpp');
+}
+
+async function saveDpp() {
+  const num   = document.getElementById('dpp-num-input').value.trim();
+  const score = document.getElementById('dpp-score-input').value.trim();
+  const notes = document.getElementById('dpp-notes-input').value.trim();
+  if (!num)   { toast('Enter a DPP number', 'error'); return; }
+  if (!score) { toast('Enter a score', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  const btn = document.getElementById('save-dpp-btn');
+  btn.disabled = true;
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_covered').update({ dpp_number: parseInt(num), score, content: notes }).eq('id', editingId);
+      if (error) throw error;
+      toast('DPP updated', 'success');
+    } else {
+      const { error } = await db.from('study_covered').insert({
+        chapter_id: currentChapter.id, type: 'dpp',
+        dpp_number: parseInt(num), score, content: notes, created_at: new Date().toISOString()
+      });
+      if (error) throw error;
+      toast('DPP logged', 'success');
+    }
+    closeModal('modal-dpp');
+    loadDpps();
+    loadChapterStats();
+  } catch(e) { toast('Failed to save DPP: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function loadDpps() {
+  const el = document.getElementById('dpps-list');
+  if (!el || !currentChapter) return;
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  try {
+    const { data, error } = await db.from('study_covered').select('*').eq('chapter_id', currentChapter.id).eq('type','dpp').order('dpp_number');
+    if (error) throw error;
+    _dppsCache = data || [];
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No DPPs logged</div><div class="empty-sub">Log your first DPP</div></div>';
+      return;
+    }
+    el.innerHTML = '<div class="card">' + data.map(d => `
+      <div class="list-item">
+        <div class="list-item-icon subj-${SUBJECT_COLORS[currentSubject.name] || 'physics'}">📋</div>
+        <div class="item-body">
+          <div class="item-title">DPP ${d.dpp_number} — Score: <span class="text-success">${esc(d.score)}</span></div>
+          ${d.content ? `<div class="item-sub">${esc(d.content)}</div>` : ''}
+          <div class="item-sub">${formatDate(d.created_at)}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn btn-secondary btn-sm btn-icon" onclick="editDpp('${d.id}')" title="Edit">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteDpp('${d.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">Failed to load DPPs: ${e.message}</div>`;
+  }
+}
+
+function editDpp(id) {
+  const d = _dppsCache.find(x => x.id == id);
+  if (!d) return;
+  editingId = id;
+  document.getElementById('modal-dpp-title').textContent = 'Edit DPP';
+  document.getElementById('dpp-num-input').value = d.dpp_number;
+  document.getElementById('dpp-score-input').value = d.score || '';
+  document.getElementById('dpp-notes-input').value = d.content || '';
+  openModal('modal-dpp');
+}
+
+function deleteDpp(id) {
+  confirmDelete('Delete this DPP log?', async () => {
+    try {
+      const { error } = await db.from('study_covered').delete().eq('id', id);
+      if (error) throw error;
+      toast('DPP deleted', 'success');
+      loadDpps();
+      loadChapterStats();
+    } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// REVISIONS
+// ──────────────────────────────────────────────
+function openAddRevisionModal() {
+  editingId = null;
+  document.getElementById('modal-revision-title').textContent = 'Log Revision';
+  document.getElementById('revision-notes-input').value = '';
+  openModal('modal-revision');
+}
+
+async function saveRevision() {
+  const notes = document.getElementById('revision-notes-input').value.trim();
+  if (!notes) { toast('Enter revision notes', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  const btn = document.getElementById('save-revision-btn');
+  btn.disabled = true;
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_revisions').update({ notes }).eq('id', editingId);
+      if (error) throw error;
+      toast('Revision updated', 'success');
+    } else {
+      const { error } = await db.from('study_revisions').insert({
+        chapter_id: currentChapter.id, notes, created_at: new Date().toISOString()
+      });
+      if (error) throw error;
+      toast('Revision logged', 'success');
+    }
+    closeModal('modal-revision');
+    loadRevisions();
+    loadChapterStats();
+  } catch(e) { toast('Failed to save revision: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function loadRevisions() {
+  const el = document.getElementById('revisions-list');
+  if (!el || !currentChapter) return;
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  try {
+    const { data, error } = await db.from('study_revisions').select('*').eq('chapter_id', currentChapter.id).order('created_at', { ascending: false });
+    if (error) throw error;
+    _revisionsCache = data || [];
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">No revisions logged</div><div class="empty-sub">Log your first revision</div></div>';
+      return;
+    }
+    el.innerHTML = '<div class="card">' + data.map(r => `
+      <div class="list-item">
+        <div class="list-item-icon" style="background:rgba(16,185,129,.15);color:#6ee7b7">🔄</div>
+        <div class="item-body">
+          <div class="item-title" style="font-weight:400;white-space:pre-wrap">${esc(r.notes)}</div>
+          <div class="item-sub">${formatDate(r.created_at)}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn btn-secondary btn-sm btn-icon" onclick="editRevision('${r.id}')" title="Edit">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteRevision('${r.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">Failed to load revisions: ${e.message}</div>`;
+  }
+}
+
+function editRevision(id) {
+  const r = _revisionsCache.find(x => x.id == id);
+  if (!r) return;
+  editingId = id;
+  document.getElementById('modal-revision-title').textContent = 'Edit Revision';
+  document.getElementById('revision-notes-input').value = r.notes;
+  openModal('modal-revision');
+}
+
+function deleteRevision(id) {
+  confirmDelete('Delete this revision log?', async () => {
+    try {
+      const { error } = await db.from('study_revisions').delete().eq('id', id);
+      if (error) throw error;
+      toast('Revision deleted', 'success');
+      loadRevisions();
+      loadChapterStats();
+    } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// TESTS
+// ──────────────────────────────────────────────
+function openAddTestModal() {
+  editingId = null;
+  document.getElementById('modal-test-title').textContent = 'Add Test';
+  document.getElementById('test-name-input').value = '';
+  document.getElementById('test-date-input').value = new Date().toISOString().split('T')[0];
+  document.getElementById('test-total-input').value = '';
+  document.getElementById('test-correct-input').value = '';
+  document.getElementById('test-wrong-input').value = '';
+  document.getElementById('test-na-input').value = '';
+  calcTestPreview();
+  openModal('modal-test');
+}
+
+function calcTestPreview() {
+  const correct = parseInt(document.getElementById('test-correct-input').value) || 0;
+  const wrong   = parseInt(document.getElementById('test-wrong-input').value)   || 0;
+  const na      = parseInt(document.getElementById('test-na-input').value)      || 0;
+  const total   = parseInt(document.getElementById('test-total-input').value)   || (correct + wrong + na);
+  const score   = (correct * 4) - wrong;
+  const max     = total * 4;
+  const pct     = max > 0 ? ((score / max) * 100).toFixed(1) : '—';
+  const attempted = correct + wrong;
+  const acc       = attempted > 0 ? ((correct / attempted) * 100).toFixed(1) + '%' : '—';
+
+  document.getElementById('prev-score').textContent = score;
+  document.getElementById('prev-max').textContent   = max || '—';
+  document.getElementById('prev-pct').textContent   = pct !== '—' ? pct + '%' : '—';
+  document.getElementById('prev-acc').textContent   = acc;
+}
+
+async function saveTest() {
+  const name    = document.getElementById('test-name-input').value.trim();
+  const date    = document.getElementById('test-date-input').value;
+  const total   = parseInt(document.getElementById('test-total-input').value);
+  const correct = parseInt(document.getElementById('test-correct-input').value) || 0;
+  const wrong   = parseInt(document.getElementById('test-wrong-input').value)   || 0;
+  const na      = parseInt(document.getElementById('test-na-input').value)      || 0;
+
+  if (!name)  { toast('Enter test name', 'error'); return; }
+  if (!date)  { toast('Enter date', 'error'); return; }
+  if (!total || total < 1) { toast('Enter total questions', 'error'); return; }
+  if (correct + wrong + na > total) { toast('Correct + Wrong + Not Attempted cannot exceed Total Questions', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+
+  const btn = document.getElementById('save-test-btn');
+  btn.disabled = true;
+  const payload = { name, test_date: date, total_questions: total, correct, wrong, not_attempted: na, created_at: new Date().toISOString() };
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_tests').update(payload).eq('id', editingId);
+      if (error) throw error;
+      toast('Test updated', 'success');
+    } else {
+      const { error } = await db.from('study_tests').insert(payload);
+      if (error) throw error;
+      toast('Test saved', 'success');
+    }
+    closeModal('modal-test');
+    loadTests();
+  } catch(e) { toast('Failed to save test: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function loadTests() {
+  const loading = document.getElementById('tests-loading');
+  const tableW  = document.getElementById('tests-table-wrap');
+  const empty   = document.getElementById('tests-empty');
+  loading.classList.remove('hidden'); tableW.classList.add('hidden'); empty.classList.add('hidden');
+
+  if (!isConfigured()) {
+    loading.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.querySelector('.empty-sub').textContent = 'Connect Supabase first';
+    return;
+  }
+
+  try {
+    const { data, error } = await db.from('study_tests').select('*').order('test_date', { ascending: false });
+    if (error) throw error;
+    loading.classList.add('hidden');
+    if (!data || !data.length) { empty.classList.remove('hidden'); return; }
+
+    // Stats
+    const scores = data.map(t => { const s = (t.correct*4)-t.wrong; const m = t.total_questions*4; return { score:s, max:m, pct: m>0?(s/m*100):0 }; });
+    const avgScore = (scores.reduce((a,x) => a+x.score, 0) / scores.length).toFixed(1);
+    const avgPct   = (scores.reduce((a,x) => a+x.pct, 0)   / scores.length).toFixed(1);
+    const bestPct  = Math.max(...scores.map(x => x.pct)).toFixed(1);
+    const avgAcc   = (data.reduce((a,t) => { const att = t.correct+t.wrong; return att>0 ? a + (t.correct/att*100) : a; }, 0) / data.length).toFixed(1);
+
+    document.getElementById('ts-total').textContent     = data.length;
+    document.getElementById('ts-avg-score').textContent = avgScore;
+    document.getElementById('ts-avg-acc').textContent   = avgAcc + '%';
+    document.getElementById('ts-best').textContent      = bestPct + '%';
+
+    tableW.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Test Name</th><th>Date</th><th>Total Qs</th><th>✅ Correct</th><th>❌ Wrong</th><th>⬜ N/A</th><th>Score</th><th>Max</th><th>%</th><th>Accuracy</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${data.map(t => {
+            const score   = (t.correct*4) - t.wrong;
+            const max     = t.total_questions * 4;
+            const pct     = max > 0 ? ((score/max)*100).toFixed(1) : '0';
+            const att     = t.correct + t.wrong;
+            const acc     = att > 0 ? ((t.correct/att)*100).toFixed(1) + '%' : '—';
+            const pctColor = pct >= 70 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger';
+            return `
+              <tr>
+                <td style="font-weight:600">${esc(t.name)}</td>
+                <td>${formatDateShort(t.test_date || t.created_at)}</td>
+                <td class="text-center">${t.total_questions}</td>
+                <td class="text-center text-success">${t.correct}</td>
+                <td class="text-center text-danger">${t.wrong}</td>
+                <td class="text-center text-muted">${t.not_attempted}</td>
+                <td class="text-center font-bold">${score}</td>
+                <td class="text-center text-muted">${max}</td>
+                <td class="text-center font-bold ${pctColor}">${pct}%</td>
+                <td class="text-center">${acc}</td>
+                <td>
+                  <div class="flex gap-4">
+                    <button class="btn btn-secondary btn-sm btn-icon" onclick="editTest('${t.id}')" title="Edit">✏️</button>
+                    <button class="btn btn-danger btn-sm btn-icon" onclick="deleteTest('${t.id}')" title="Delete">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    tableW.classList.remove('hidden');
+  } catch(e) {
+    loading.classList.add('hidden');
+    toast('Failed to load tests: ' + e.message, 'error');
+  }
+}
+
+async function editTest(id) {
+  if (!isConfigured()) return;
+  try {
+    const { data, error } = await db.from('study_tests').select('*').eq('id', id).single();
+    if (error) throw error;
+    editingId = id;
+    document.getElementById('modal-test-title').textContent = 'Edit Test';
+    document.getElementById('test-name-input').value    = data.name;
+    document.getElementById('test-date-input').value    = data.test_date;
+    document.getElementById('test-total-input').value   = data.total_questions;
+    document.getElementById('test-correct-input').value = data.correct;
+    document.getElementById('test-wrong-input').value   = data.wrong;
+    document.getElementById('test-na-input').value      = data.not_attempted;
+    calcTestPreview();
+    openModal('modal-test');
+  } catch(e) { toast('Failed to load test: ' + e.message, 'error'); }
+}
+
+function deleteTest(id) {
+  confirmDelete('Delete this test record?', async () => {
+    try {
+      const { error } = await db.from('study_tests').delete().eq('id', id);
+      if (error) throw error;
+      toast('Test deleted', 'success');
+      loadTests();
+    } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// MISTAKES
+// ──────────────────────────────────────────────
+function openAddMistakeModal() {
+  editingId = null;
+  document.getElementById('modal-mistake-title').textContent = 'Add Mistake Note';
+  document.getElementById('mistake-subj-input').value  = '';
+  document.getElementById('mistake-topic-input').value = '';
+  document.getElementById('mistake-note-input').value  = '';
+  openModal('modal-mistake');
+}
+
+async function saveMistake() {
+  const subject = document.getElementById('mistake-subj-input').value;
+  const topic   = document.getElementById('mistake-topic-input').value.trim();
+  const note    = document.getElementById('mistake-note-input').value.trim();
+
+  if (!subject) { toast('Select a subject', 'error'); return; }
+  if (!note)    { toast('Enter a mistake note', 'error'); return; }
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+
+  const btn = document.getElementById('save-mistake-btn');
+  btn.disabled = true;
+  try {
+    if (editingId) {
+      const { error } = await db.from('study_mistakes').update({ subject, topic, note }).eq('id', editingId);
+      if (error) throw error;
+      toast('Mistake updated', 'success');
+    } else {
+      const { error } = await db.from('study_mistakes').insert({ subject, topic, note, created_at: new Date().toISOString() });
+      if (error) throw error;
+      toast('Mistake saved', 'success');
+    }
+    closeModal('modal-mistake');
+    loadMistakes();
+  } catch(e) { toast('Failed to save mistake: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+async function loadMistakes() {
+  const loading = document.getElementById('mistakes-loading');
+  const listEl  = document.getElementById('mistakes-list');
+  const emptyEl = document.getElementById('mistakes-empty');
+  loading.classList.remove('hidden'); listEl.classList.add('hidden'); emptyEl.classList.add('hidden');
+
+  if (!isConfigured()) {
+    loading.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    emptyEl.querySelector('.empty-sub').textContent = 'Connect Supabase first';
+    return;
+  }
+
+  try {
+    const { data, error } = await db.from('study_mistakes').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    allMistakes = data || [];
+    _mistakesCache = data || [];
+    loading.classList.add('hidden');
+    renderMistakesList();
+  } catch(e) {
+    loading.classList.add('hidden');
+    toast('Failed to load mistakes: ' + e.message, 'error');
+  }
+}
+
+function filterMistakes(filter, el) {
+  mistakeFilter = filter;
+  document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderMistakesList();
+}
+
+function searchMistakes() { renderMistakesList(); }
+
+function renderMistakesList() {
+  const listEl  = document.getElementById('mistakes-list');
+  const emptyEl = document.getElementById('mistakes-empty');
+  const q       = (document.getElementById('mistake-search').value || '').toLowerCase();
+
+  let filtered = allMistakes;
+  if (mistakeFilter !== 'all') filtered = filtered.filter(m => m.subject === mistakeFilter);
+  if (q) filtered = filtered.filter(m => (m.note||'').toLowerCase().includes(q) || (m.topic||'').toLowerCase().includes(q) || (m.subject||'').toLowerCase().includes(q));
+
+  if (!filtered.length) {
+    listEl.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  listEl.innerHTML = filtered.map(m => {
+    const color = SUBJECT_COLORS[m.subject] || 'physics';
+    const icon  = SUBJECT_ICONS[m.subject] || '❓';
+    return `
+      <div class="card mb-16" style="border-left:3px solid var(--${color==='physics'?'primary':color==='chemistry'?'secondary':color==='zoology'?'success':'warning'})">
+        <div class="flex justify-between items-center flex-wrap gap-8 mb-8">
+          <div class="flex items-center gap-8">
+            <span class="badge badge-${color}">${icon} ${m.subject}</span>
+            ${m.topic ? `<span style="font-size:13px;font-weight:600;color:var(--text)">${esc(m.topic)}</span>` : ''}
+          </div>
+          <div class="flex gap-4">
+            <span style="font-size:11px;color:var(--text-dim)">${formatDate(m.created_at)}</span>
+            <button class="btn btn-secondary btn-sm btn-icon" onclick="editMistake('${m.id}')" title="Edit">✏️</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteMistake('${m.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+        <div style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap">${esc(m.note)}</div>
+      </div>
+    `;
+  }).join('');
+  listEl.classList.remove('hidden');
+}
+
+async function editMistake(id) {
+  const m = allMistakes.find(x => x.id == id);
+  if (!m) return;
+  editingId = id;
+  document.getElementById('modal-mistake-title').textContent = 'Edit Mistake Note';
+  document.getElementById('mistake-subj-input').value  = m.subject;
+  document.getElementById('mistake-topic-input').value = m.topic || '';
+  document.getElementById('mistake-note-input').value  = m.note;
+  openModal('modal-mistake');
+}
+
+function deleteMistake(id) {
+  confirmDelete('Delete this mistake note?', async () => {
+    try {
+      const { error } = await db.from('study_mistakes').delete().eq('id', id);
+      if (error) throw error;
+      toast('Mistake deleted', 'success');
+      loadMistakes();
+    } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+// ──────────────────────────────────────────────
+// SETTINGS
+// ──────────────────────────────────────────────
+function loadSettings() {
+  const cfg = loadConfig();
+  document.getElementById('cfg-url').value = cfg.url;
+  document.getElementById('cfg-key').value = cfg.key;
+  renderSetupSql();
+}
+
+function saveSettings() {
+  const url = document.getElementById('cfg-url').value.trim();
+  const key = document.getElementById('cfg-key').value.trim();
+  if (!url || !key) { showConnAlert('error', 'Please enter both URL and Key.'); return; }
+  if (!url.startsWith('https://')) { showConnAlert('error', 'URL must start with https://'); return; }
+  localStorage.setItem('sl_url', url);
+  localStorage.setItem('sl_key', key);
+  db = null;
+  const ok = initSupabase();
+  if (ok) { showConnAlert('success', '✅ Settings saved. Connection initialized.'); toast('Settings saved', 'success'); }
+  else    { showConnAlert('error', '❌ Failed to initialize client. Check your URL and Key.'); }
+}
+
+async function testConnection() {
+  if (!isConfigured()) { saveSettings(); if (!isConfigured()) return; }
+  showConnAlert('info', '🔄 Testing connection...');
+  try {
+    const { data, error } = await db.from('study_subjects').select('id').limit(1);
+    if (error) throw error;
+    showConnAlert('success', '✅ Connection successful! Database is accessible.');
+    setConnStatus('ok', '✅ Connected');
+  } catch(e) {
+    showConnAlert('error', '❌ Connection failed: ' + e.message);
+    setConnStatus('err', '❌ Error');
+  }
+}
+
+function clearSettings() {
+  localStorage.removeItem('sl_url');
+  localStorage.removeItem('sl_key');
+  document.getElementById('cfg-url').value = '';
+  document.getElementById('cfg-key').value = '';
+  db = null;
+  setConnStatus('warn', '⚡ Not Connected');
+  showConnAlert('info', 'Settings cleared.');
+}
+
+function showConnAlert(type, msg) {
+  const el = document.getElementById('conn-alert-area');
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  el.classList.remove('hidden');
+}
+
+function toggleSqlView() {
+  const el = document.getElementById('sql-view');
+  el.classList.toggle('hidden');
+}
+
+function renderSetupSql() {
+  const sql = `-- Study Logger — Supabase Setup SQL
+-- Run this in your Supabase SQL Editor (safe to run multiple times)
+
+-- Subjects table
+CREATE TABLE IF NOT EXISTS study_subjects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Chapters table
+CREATE TABLE IF NOT EXISTS study_chapters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject_id UUID REFERENCES study_subjects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Covered (Lectures & DPPs)
+CREATE TABLE IF NOT EXISTS study_covered (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id UUID REFERENCES study_chapters(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('lecture','dpp')),
+  lecture_number INTEGER,
+  dpp_number INTEGER,
+  score TEXT,
+  content TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Revisions
+CREATE TABLE IF NOT EXISTS study_revisions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id UUID REFERENCES study_chapters(id) ON DELETE CASCADE,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Mistakes
+CREATE TABLE IF NOT EXISTS study_mistakes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject TEXT NOT NULL,
+  topic TEXT,
+  note TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tests
+CREATE TABLE IF NOT EXISTS study_tests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  test_date DATE NOT NULL,
+  total_questions INTEGER NOT NULL,
+  correct INTEGER NOT NULL DEFAULT 0,
+  wrong INTEGER NOT NULL DEFAULT 0,
+  not_attempted INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- To-Do tasks (stored in study_topics)
+CREATE TABLE IF NOT EXISTS study_topics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_text TEXT NOT NULL,
+  is_completed BOOLEAN NOT NULL DEFAULT false,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Settings table (optional, for future use)
+CREATE TABLE IF NOT EXISTS study_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key TEXT UNIQUE NOT NULL,
+  value TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Row Level Security (enable if needed)
+-- ALTER TABLE study_subjects ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all" ON study_subjects FOR ALL USING (true);
+-- (Repeat for each table)
+
+-- Or for open access (anon key only, no auth):
+-- GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
+
+  const el = document.getElementById('sql-content');
+  if (el) el.textContent = sql;
+}
+
+function copySql() {
+  const sql = document.getElementById('sql-content').textContent;
+  navigator.clipboard.writeText(sql).then(() => toast('SQL copied to clipboard', 'success')).catch(() => toast('Could not copy', 'error'));
+}
+
+// ──────────────────────────────────────────────
+// EXPORT
+// ──────────────────────────────────────────────
+async function exportData() {
+  if (!isConfigured()) { toast('Supabase not configured', 'error'); return; }
+  toast('Preparing export...', 'info');
+  try {
+    const [subjRes, chapRes, covRes, revRes, mistRes, testRes, todoRes] = await Promise.all([
+      db.from('study_subjects').select('*'),
+      db.from('study_chapters').select('*'),
+      db.from('study_covered').select('*'),
+      db.from('study_revisions').select('*'),
+      db.from('study_mistakes').select('*'),
+      db.from('study_tests').select('*'),
+      db.from('study_topics').select('*')
+    ]);
+
+    const exportObj = {
+      export_version: '1.0',
+      exported_at: new Date().toISOString(),
+      app: 'Study Logger',
+      data: {
+        subjects:   subjRes.data || [],
+        chapters:   chapRes.data || [],
+        covered:    covRes.data  || [],
+        revisions:  revRes.data  || [],
+        mistakes:   mistRes.data || [],
+        tests:      testRes.data || [],
+        todos:      todoRes.data || []
+      },
+      schema_notes: {
+        covered: 'Contains both lectures (type=lecture) and DPPs (type=dpp). lecture_number used for lectures, dpp_number+score used for DPPs.',
+        todos:   'study_topics table stores to-do tasks. is_completed+completed_at track completion.',
+        tests:   'Standalone test records. Score = (correct*4) - wrong. Max = total_questions*4.'
+      }
+    };
+
+    const json = JSON.stringify(exportObj, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `study-logger-export-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Export downloaded!', 'success');
+  } catch(e) { toast('Export failed: ' + e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────────
+// UTILITIES
+// ──────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g,"\\'").replace(/\n/g,' ');
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = (now - d) / 1000;
+    if (diff < 60)   return 'Just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  } catch(e) { return ts; }
+}
+
+function formatDateShort(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  } catch(e) { return ts; }
+}
+
+// ──────────────────────────────────────────────
+// KEYBOARD SHORTCUTS
+// ──────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+  }
+});
+
+// Click outside modal to close
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  });
+});
+
+// ──────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────
+(function init() {
+  initSupabase();
+  loadSettings();
+  loadHome();
+})();
+</script>
+</body>
+</html>
